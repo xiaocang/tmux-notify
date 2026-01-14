@@ -13,7 +13,7 @@ CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Default options
 default_terminal_notifier_path="terminal-notifier"
 default_status_format="#[fg=yellow]#{notify_count}#[default]"
-default_popup_key="n"
+default_popup_key=""
 default_mark_read_on_pane_switch="on"
 
 # Get tmux option with default

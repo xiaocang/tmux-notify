@@ -20,6 +20,47 @@ get_tn_path() {
     fi
 }
 
+# Cache file for daemon support check
+CACHE_FILE="${TMPDIR:-/tmp}/.tmux-notify-daemon-check"
+
+# Check if terminal-notifier supports daemon mode
+# Returns 0 if patched version, 1 if standard version
+# Result is cached to avoid repeated timeout delays
+is_daemon_supported() {
+    local tn_path
+    tn_path=$(get_tn_path)
+
+    # Check cache first (valid for current session)
+    if [[ -f "$CACHE_FILE" ]]; then
+        local cached_path cached_result
+        read -r cached_path cached_result < "$CACHE_FILE"
+        if [[ "$cached_path" == "$tn_path" ]]; then
+            return "$cached_result"
+        fi
+    fi
+
+    # Use timeout to detect standard version (hangs on -query)
+    # Patched version returns JSON immediately
+    local result
+    result=$(timeout 1 "$tn_path" -query 2>/dev/null)
+    local exit_code=$?
+
+    # timeout returns 124 if command times out
+    if [[ $exit_code -eq 124 ]]; then
+        echo "$tn_path 1" > "$CACHE_FILE"
+        return 1
+    fi
+
+    # Check if we got valid JSON response (patched version)
+    if [[ "$result" == *'"ok":'* ]]; then
+        echo "$tn_path 0" > "$CACHE_FILE"
+        return 0
+    fi
+
+    echo "$tn_path 1" > "$CACHE_FILE"
+    return 1
+}
+
 # Query notifications from daemon
 query_notifications() {
     local tn_path
@@ -70,6 +111,12 @@ get_latest_pane() {
 # Main
 main() {
     local mode="${1:-full}"
+
+    # Check if terminal-notifier supports daemon mode
+    if ! is_daemon_supported; then
+        echo ""
+        return
+    fi
 
     if [[ "$mode" == "count" ]]; then
         get_unread_count
