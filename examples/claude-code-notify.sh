@@ -1,39 +1,87 @@
 #!/bin/bash
-# claude-code-notify.sh
-# Hook script for Claude Code: shows notification when input is required
+# ABOUTME: Claude Code notification hook - integrates with tmux-notify
 #
 # Usage in ~/.claude/settings.json:
 # {
 #   "hooks": {
-#     "PreToolUse": [
+#     "Notification": [
 #       {
-#         "matcher": ".*",
-#         "hooks": ["~/.tmux/plugins/tmux-notify/examples/claude-code-notify.sh"]
+#         "matcher": "",
+#         "hooks": [
+#           {
+#             "type": "command",
+#             "command": "/path/to/this/claude-code-notify.sh"
+#           }
+#         ]
+#       }
+#     ],
+#     "Stop": [
+#       {
+#         "matcher": "",
+#         "hooks": [
+#           {
+#             "type": "command",
+#             "command": "/path/to/this/claude-code-notify.sh"
+#           }
+#         ]
 #       }
 #     ]
 #   }
 # }
 #
-# Environment variables from Claude Code:
-# - CLAUDE_CWD: Current working directory
-# - TOOL_NAME: Name of the tool being executed (for tool hooks)
-# - SESSION_ID: Session identifier
+# The hook receives JSON via stdin with notification details.
+# It walks up the process tree to find the correct tmux pane.
 
-set -e
+# Find tmux pane ID and window info by walking up the process tree
+# Sets: PANE_ID, WINDOW_INDEX
+get_tmux_info() {
+    PANE_ID=""
+    WINDOW_INDEX=""
+
+    if [ -z "$TMUX" ]; then
+        return
+    fi
+
+    # Get all pane PIDs with pane ID and window index
+    local pane_info
+    pane_info=$(tmux list-panes -a -F "#{pane_pid}|#{pane_id}|#{window_index}" 2>/dev/null)
+
+    if [ -z "$pane_info" ]; then
+        return
+    fi
+
+    # Walk up the process tree from current PID to find matching pane
+    local current_pid=$$
+    while [ "$current_pid" -gt 1 ]; do
+        local match
+        match=$(echo "$pane_info" | awk -F'|' -v pid="$current_pid" '$1 == pid {print $2 "|" $3; exit}')
+        if [ -n "$match" ]; then
+            PANE_ID=$(echo "$match" | cut -d'|' -f1)
+            WINDOW_INDEX=$(echo "$match" | cut -d'|' -f2)
+            return
+        fi
+
+        # Get parent PID
+        current_pid=$(ps -o ppid= -p "$current_pid" 2>/dev/null | tr -d ' ')
+        if [ -z "$current_pid" ]; then
+            break
+        fi
+    done
+}
 
 # Find tmux-notify binary
 find_binary() {
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-    # Check for bundled binary
-    if [[ -x "$script_dir/../bin/tmux-notify" ]]; then
+    # Check for bundled binary (TPM install)
+    if [ -x "$script_dir/../bin/tmux-notify" ]; then
         echo "$script_dir/../bin/tmux-notify"
         return
     fi
 
     # Check for development build
-    if [[ -x "$script_dir/../target/release/tmux-notify" ]]; then
+    if [ -x "$script_dir/../target/release/tmux-notify" ]; then
         echo "$script_dir/../target/release/tmux-notify"
         return
     fi
@@ -47,59 +95,39 @@ find_binary() {
     echo ""
 }
 
-# Get tmux pane ID
-get_pane_id() {
-    if [[ -n "$TMUX" ]]; then
-        tmux display-message -p '#{pane_id}' 2>/dev/null || echo ""
+# Read notification data from stdin
+NOTIFICATION_JSON=$(cat)
+
+# Extract message from JSON
+if printf '%s' "$NOTIFICATION_JSON" | jq . >/dev/null 2>&1; then
+    EXTRACTED=$(printf '%s' "$NOTIFICATION_JSON" | jq -r '.notification.message // .tool_input.message // empty' 2>/dev/null)
+    if [ -n "$EXTRACTED" ] && [ "$EXTRACTED" != "null" ]; then
+        MESSAGE=$(printf '%s' "$EXTRACTED" | head -c 200)
     else
-        echo ""
+        MESSAGE="Task completed"
     fi
-}
+else
+    MESSAGE="Claude Code notification"
+fi
 
-# Get tmux window info for display
-get_tmux_info() {
-    if [[ -n "$TMUX" ]]; then
-        local window_index window_name
-        window_index=$(tmux display-message -p '#{window_index}' 2>/dev/null)
-        window_name=$(tmux display-message -p '#{window_name}' 2>/dev/null)
-        if [[ -n "$window_index" && -n "$window_name" ]]; then
-            echo "[${window_index}] ${window_name}"
-        else
-            echo "[tmux]"
-        fi
-    else
-        echo "[terminal]"
+# Get tmux info (sets PANE_ID and WINDOW_INDEX)
+get_tmux_info
+
+if [ -n "$PANE_ID" ]; then
+    NOTIFY_BIN=$(find_binary)
+
+    if [ -n "$NOTIFY_BIN" ]; then
+        # Get current count before adding (new notification will make it +1)
+        CURRENT_COUNT=$("$NOTIFY_BIN" count 2>/dev/null || echo "0")
+        TOTAL_COUNT=$((CURRENT_COUNT + 1))
+
+        # Build title: N:{window_index} T:{total_count}
+        TITLE="N:${WINDOW_INDEX:-?} T:${TOTAL_COUNT}"
+
+        # Add notification
+        "$NOTIFY_BIN" add -t "$TITLE" -m "$MESSAGE" -p "$PANE_ID" 2>/dev/null
     fi
-}
+fi
 
-# Main
-main() {
-    local binary
-    binary=$(find_binary)
-
-    if [[ -z "$binary" ]]; then
-        echo "tmux-notify binary not found" >&2
-        exit 0
-    fi
-
-    local pane_id
-    pane_id=$(get_pane_id)
-
-    if [[ -z "$pane_id" ]]; then
-        # Not in tmux, skip notification
-        exit 0
-    fi
-
-    local tmux_info
-    tmux_info=$(get_tmux_info)
-
-    local project_name
-    project_name=$(basename "${CLAUDE_CWD:-$(pwd)}")
-
-    local notify_title="Claude Code $tmux_info ($project_name)"
-    local notify_message="${TOOL_NAME:-Input required}"
-
-    "$binary" add -t "$notify_title" -m "$notify_message" -p "$pane_id" &>/dev/null || true
-}
-
-main "$@"
+# Always continue
+echo '{"continue":true}'

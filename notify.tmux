@@ -55,13 +55,14 @@ setup_popup_keybinding() {
     fi
 }
 
-# Set up pane switch hook for auto mark-read
+# Set up pane/window switch hooks for auto mark-read
 setup_pane_switch_hook() {
     local mark_read_on_switch
     mark_read_on_switch=$(get_tmux_option "@notify_mark_read_on_pane_switch" "$default_mark_read_on_pane_switch")
 
     if [[ "$mark_read_on_switch" == "on" ]]; then
         tmux set-hook -g after-select-pane "run-shell '$CURRENT_DIR/scripts/notify-hook.sh'"
+        tmux set-hook -g after-select-window "run-shell '$CURRENT_DIR/scripts/notify-hook.sh'"
     fi
 }
 
