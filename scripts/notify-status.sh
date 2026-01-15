@@ -50,8 +50,8 @@ get_unread_count() {
     "$binary" count 2>/dev/null || echo "0"
 }
 
-# Get latest notification pane
-get_latest_pane() {
+# Get window number of latest unread notification
+get_latest_window_number() {
     local binary
     binary=$(get_binary_path)
 
@@ -69,12 +69,20 @@ get_latest_pane() {
     fi
 
     # Get pane of first unread notification
+    local pane
     if command -v jq &>/dev/null; then
-        echo "$json" | jq -r '[.notifications[] | select(.state == "unread")] | .[0].pane // empty' 2>/dev/null
+        pane=$(echo "$json" | jq -r '[.notifications[] | select(.state == "unread")] | .[0].pane // empty' 2>/dev/null)
     else
-        # Fallback: extract first pane value from unread notifications
-        echo "$json" | grep -o '"pane":"[^"]*"' | head -1 | sed 's/"pane":"//;s/"//'
+        pane=$(echo "$json" | grep -o '"pane":"[^"]*"' | head -1 | sed 's/"pane":"//;s/"//')
     fi
+
+    if [[ -z "$pane" ]]; then
+        echo ""
+        return
+    fi
+
+    # Get window number from pane ID
+    tmux display-message -p -t "$pane" '#{window_index}' 2>/dev/null
 }
 
 # Main
@@ -86,7 +94,7 @@ main() {
         return
     fi
 
-    # Full status mode
+    # Full status mode - show N:{latest_window_number} T:{count}
     local count
     count=$(get_unread_count)
 
@@ -96,13 +104,13 @@ main() {
         return
     fi
 
-    local pane
-    pane=$(get_latest_pane)
+    local window_num
+    window_num=$(get_latest_window_number)
 
-    if [[ -n "$pane" ]]; then
-        echo "${count} [${pane}]"
+    if [[ -n "$window_num" ]]; then
+        echo "N:${window_num} T:${count}"
     else
-        echo "${count}"
+        echo "T:${count}"
     fi
 }
 
