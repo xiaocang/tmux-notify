@@ -40,6 +40,25 @@ get_current_pane() {
     tmux display-message -p '#{pane_id}'
 }
 
+# Get current window ID
+get_current_window() {
+    tmux display-message -p '#{window_id}'
+}
+
+# Dismiss all notifications for panes in a window
+dismiss_window_notifications() {
+    local binary="$1"
+    local window="$2"
+
+    # Get all pane IDs in the window
+    local panes
+    panes=$(tmux list-panes -t "$window" -F '#{pane_id}' 2>/dev/null)
+
+    for pane in $panes; do
+        "$binary" dismiss "$pane" &>/dev/null
+    done
+}
+
 # Main
 main() {
     local binary
@@ -48,6 +67,21 @@ main() {
     if [[ -z "$binary" ]]; then
         return
     fi
+
+    local current_window
+    current_window=$(get_current_window)
+
+    local last_window
+    last_window=$(tmux show-option -gqv '@notify_last_window')
+
+    # Check if this is a window switch
+    if [[ -n "$last_window" && "$last_window" != "$current_window" ]]; then
+        # Dismiss notifications from the previous window (user was already viewing it)
+        dismiss_window_notifications "$binary" "$last_window"
+    fi
+
+    # Update last window tracker
+    tmux set-option -g '@notify_last_window' "$current_window"
 
     local pane
     pane=$(get_current_pane)
