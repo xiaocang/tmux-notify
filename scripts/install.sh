@@ -13,7 +13,7 @@ BIN_DIR="$PLUGIN_DIR/bin"
 BINARY_PATH="$BIN_DIR/tmux-notify"
 
 REPO="xiaocang/tmux-notify"
-VERSION="v$(cat "$PLUGIN_DIR/VERSION")"
+VERSION="v0.1.0"
 
 # Detect OS and architecture
 detect_platform() {

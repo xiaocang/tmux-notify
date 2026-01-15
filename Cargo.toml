@@ -1,6 +1,6 @@
 [package]
 name = "tmux-notify"
-# Keep in sync with VERSION file
+# Keep in sync with scripts/install.sh
 version = "0.1.0"
 edition = "2021"
 description = "Notification daemon for tmux"
