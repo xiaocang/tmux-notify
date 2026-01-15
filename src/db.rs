@@ -89,10 +89,9 @@ impl Database {
     }
 
     pub fn dismiss(&self, pane: &str) -> Result<usize> {
-        let deleted = self.conn.execute(
-            "DELETE FROM notifications WHERE pane = ?1",
-            [pane],
-        )?;
+        let deleted = self
+            .conn
+            .execute("DELETE FROM notifications WHERE pane = ?1", [pane])?;
         Ok(deleted)
     }
 
@@ -103,10 +102,9 @@ impl Database {
             .as_secs() as i64
             - (retention_hours * 3600);
 
-        let deleted = self.conn.execute(
-            "DELETE FROM notifications WHERE created_at < ?1",
-            [cutoff],
-        )?;
+        let deleted = self
+            .conn
+            .execute("DELETE FROM notifications WHERE created_at < ?1", [cutoff])?;
         Ok(deleted)
     }
 }
