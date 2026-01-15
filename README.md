@@ -7,9 +7,9 @@ A tmux plugin for managing notifications with:
 
 ## Features
 
-- **Status line widget**: Show unread count and latest pane
+- **Status line widget**: Show unread count and window number with notifications
 - **Popup viewer**: Browse/dismiss notifications with `fzf`
-- **Auto mark-read**: Mark notifications read on pane switch
+- **Auto mark-read**: Mark notifications read on pane switch, auto-dismiss previous window's notifications on window switch
 - **One notification per pane**: New messages overwrite previous ones
 
 ## Requirements
@@ -70,7 +70,7 @@ set -g @notify_retention_hours "24"
 Add `#{notify_status}` or `#{notify_count}` to your status line:
 
 ```tmux
-# Shows: "3 [%5]" (count and latest pane)
+# Shows: "N:5 T:3" (window number and total count)
 set -g status-right "#{notify_status} | %H:%M"
 
 # Shows: "3" (count only)
@@ -102,7 +102,7 @@ Options:
 
 ### Popup viewer
 
-Press `prefix + n` (or your configured `@notify_popup_key`):
+The popup viewer keybinding is disabled by default. Set `@notify_popup_key` to enable it.
 
 - **Enter**: Switch to the notification's pane
 - **Ctrl-D**: Dismiss the selected notification
