@@ -91,6 +91,12 @@ main() {
         # Run silently in background to not block pane switching
         "$binary" mark-read "$pane" &>/dev/null &
     fi
+
+    # Run cleanup with configured retention (passive cleanup on pane/window switch)
+    local retention
+    retention=$(tmux show-option -gqv '@notify_retention_hours')
+    retention=${retention:-24}
+    "$binary" cleanup --retention "$retention" &>/dev/null &
 }
 
 main "$@"

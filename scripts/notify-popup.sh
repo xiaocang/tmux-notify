@@ -5,8 +5,13 @@
 # Shows notifications in a tmux popup with fzf for selection.
 # Selected notification can be dismissed or its pane can be opened.
 #
+# Usage:
+#   notify-popup.sh          - Show popup (normal mode)
+#   notify-popup.sh refresh  - Output formatted notifications (for fzf reload)
+#
 
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
 
 # Get the tmux-notify binary path
 get_binary_path() {
@@ -51,6 +56,16 @@ format_notification() {
         "\t" + .pane' 2>/dev/null
 }
 
+# Prune stale notifications for non-existent panes
+prune_stale_panes() {
+    local binary="$1"
+    local valid_panes
+    valid_panes=$(tmux list-panes -a -F '#{pane_id}' 2>/dev/null | tr '\n' ',' | sed 's/,$//')
+    if [[ -n "$valid_panes" ]]; then
+        "$binary" prune --valid-panes "$valid_panes" &>/dev/null
+    fi
+}
+
 # Show popup with fzf
 show_popup() {
     local binary
@@ -60,6 +75,9 @@ show_popup() {
         tmux display-message "Error: tmux-notify binary not found"
         return 1
     fi
+
+    # Prune stale notifications before displaying
+    prune_stale_panes "$binary"
 
     # Query notifications
     local json
@@ -99,7 +117,7 @@ show_popup() {
     selected=$(tmux popup -E -w 80% -h 60% "cat '$tmpfile' | fzf \
         --ansi \
         --header='Enter: go to pane | Ctrl-D: dismiss | Esc: close' \
-        --bind='ctrl-d:execute-silent($binary dismiss {-1})+reload(cat $tmpfile)' \
+        --bind='ctrl-d:execute-silent($binary dismiss {-1})+reload($SCRIPT_PATH refresh)' \
         --preview-window=hidden")
 
     rm -f "$tmpfile"
@@ -117,8 +135,33 @@ show_popup() {
     fi
 }
 
+# Output formatted notifications (for fzf reload)
+refresh_notifications() {
+    local binary
+    binary=$(get_binary_path)
+
+    if [[ -z "$binary" ]]; then
+        return 1
+    fi
+
+    local json
+    json=$("$binary" query 2>/dev/null)
+
+    if [[ -z "$json" ]] || [[ "$json" == *'"ok":false'* ]]; then
+        return 1
+    fi
+
+    format_notification "$json"
+}
+
 # Main
 main() {
+    # Handle refresh mode (called by fzf reload)
+    if [[ "$1" == "refresh" ]]; then
+        refresh_notifications
+        return $?
+    fi
+
     # Check for fzf
     if ! command -v fzf &>/dev/null; then
         tmux display-message "Error: fzf is required for popup viewer"

@@ -28,6 +28,21 @@ get_tmux_option() {
     fi
 }
 
+# Check if tmux version supports popup (3.2+)
+tmux_supports_popup() {
+    local version
+    version=$(tmux -V | grep -oE '[0-9]+\.[0-9]+' | head -1)
+    local major minor
+    major=$(echo "$version" | cut -d. -f1)
+    minor=$(echo "$version" | cut -d. -f2)
+
+    # Popup requires tmux 3.2 or later
+    if [[ "$major" -gt 3 ]] || { [[ "$major" -eq 3 ]] && [[ "$minor" -ge 2 ]]; }; then
+        return 0
+    fi
+    return 1
+}
+
 # Set up format strings for status line
 setup_notify_interpolation() {
     local notify_status_interpolation="\#{notify_status}"
@@ -51,7 +66,11 @@ setup_popup_keybinding() {
     popup_key=$(get_tmux_option "@notify_popup_key" "$default_popup_key")
 
     if [[ -n "$popup_key" ]]; then
-        tmux bind-key "$popup_key" run-shell "$CURRENT_DIR/scripts/notify-popup.sh"
+        if tmux_supports_popup; then
+            tmux bind-key "$popup_key" run-shell "$CURRENT_DIR/scripts/notify-popup.sh"
+        else
+            tmux display-message "tmux-notify: popup requires tmux 3.2+, keybinding disabled"
+        fi
     fi
 }
 

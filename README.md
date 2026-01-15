@@ -14,11 +14,11 @@ A tmux plugin for managing notifications with:
 
 ## Requirements
 
-- `tmux` (with popup support for the viewer)
+- `tmux` 3.2+ (required for popup viewer)
 - `tmux-notify` binary (pre-built or compiled from source)
-- Optional:
-  - `jq` (for popup viewer formatting)
-  - `fzf` (required for the popup viewer)
+- For popup viewer:
+  - `fzf` (required)
+  - `jq` (required)
 
 ## Installation
 
@@ -92,6 +92,7 @@ Commands:
   mark-read  Mark notification as read for a pane
   dismiss    Dismiss (delete) notification for a pane
   cleanup    Manually cleanup old notifications
+  prune      Prune notifications for non-existent panes
   reset      Reset (delete) the entire notification database
   help       Print this message or the help of the given subcommand(s)
 

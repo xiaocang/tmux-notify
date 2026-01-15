@@ -64,6 +64,13 @@ enum Commands {
         retention: i64,
     },
 
+    /// Prune notifications for non-existent panes
+    Prune {
+        /// Comma-separated list of valid pane IDs (e.g., "%1,%2,%3")
+        #[arg(long)]
+        valid_panes: String,
+    },
+
     /// Reset (delete) the entire notification database
     Reset,
 }
@@ -87,7 +94,10 @@ fn main() {
 fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     // Handle Reset separately since it doesn't need the DB connection
     if matches!(cli.command, Commands::Reset) {
-        let db_path = cli.db_path.unwrap_or_else(get_default_db_path);
+        let db_path = match cli.db_path {
+            Some(path) => path,
+            None => get_default_db_path()?,
+        };
         if db_path.exists() {
             std::fs::remove_file(&db_path)?;
             println!("{{\"ok\":true,\"path\":\"{}\"}}", db_path.display());
@@ -139,6 +149,16 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Commands::Cleanup { retention } => {
             let deleted = db.cleanup(retention)?;
             println!("{{\"ok\":true,\"deleted\":{}}}", deleted);
+        }
+
+        Commands::Prune { valid_panes } => {
+            let panes: Vec<String> = valid_panes
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            let deleted = db.prune(&panes)?;
+            println!("{{\"ok\":true,\"pruned\":{}}}", deleted);
         }
 
         Commands::Reset => {
