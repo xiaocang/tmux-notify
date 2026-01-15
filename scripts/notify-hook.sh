@@ -6,15 +6,33 @@
 # when switching to a pane that has notifications.
 #
 
-# Get terminal-notifier path from tmux option or use default
-get_tn_path() {
-    local path
-    path=$(tmux show-option -gqv "@notify_terminal_notifier_path" 2>/dev/null)
-    if [[ -z "$path" ]]; then
-        echo "terminal-notifier"
-    else
-        echo "$path"
+CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Get the tmux-notify binary path
+get_binary_path() {
+    local bin_path
+
+    # Check for bundled binary first
+    bin_path="${CURRENT_DIR}/../bin/tmux-notify"
+    if [[ -x "$bin_path" ]]; then
+        echo "$bin_path"
+        return
     fi
+
+    # Check for development build
+    bin_path="${CURRENT_DIR}/../target/release/tmux-notify"
+    if [[ -x "$bin_path" ]]; then
+        echo "$bin_path"
+        return
+    fi
+
+    # Fall back to PATH
+    if command -v tmux-notify &>/dev/null; then
+        echo "tmux-notify"
+        return
+    fi
+
+    echo ""
 }
 
 # Get current pane ID
@@ -24,8 +42,12 @@ get_current_pane() {
 
 # Main
 main() {
-    local tn_path
-    tn_path=$(get_tn_path)
+    local binary
+    binary=$(get_binary_path)
+
+    if [[ -z "$binary" ]]; then
+        return
+    fi
 
     local pane
     pane=$(get_current_pane)
@@ -33,7 +55,7 @@ main() {
     if [[ -n "$pane" ]]; then
         # Mark notifications for this pane as read
         # Run silently in background to not block pane switching
-        "$tn_path" -mark-read "$pane" &>/dev/null &
+        "$binary" mark-read "$pane" &>/dev/null &
     fi
 }
 

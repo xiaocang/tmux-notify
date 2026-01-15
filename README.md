@@ -1,28 +1,24 @@
 # tmux-notify
 
-A tmux plugin that integrates with `terminal-notifier` **daemon mode** to:
-- Show unread notification count in your tmux status line
-- Open a popup viewer to browse/dismiss notifications
-- Automatically mark notifications as read when you switch to the triggering pane
+A tmux plugin for managing notifications with:
+- Unread notification count in your tmux status line
+- Popup viewer to browse/dismiss notifications
+- Automatic mark-as-read when switching to a notification's pane
 
 ## Features
 
-- **Status line widget**: show unread count (and latest pane)
-- **Popup viewer**: browse/dismiss notifications with `fzf`
-- **Auto mark-read**: mark notifications read on pane switch
+- **Status line widget**: Show unread count and latest pane
+- **Popup viewer**: Browse/dismiss notifications with `fzf`
+- **Auto mark-read**: Mark notifications read on pane switch
+- **One notification per pane**: New messages overwrite previous ones
 
 ## Requirements
 
-- macOS (uses `terminal-notifier`)
-- `tmux`
-- `terminal-notifier` with daemon commands (`-query`, `-mark-read`, `-dismiss`)
-- Optional (recommended):
-  - `jq` (better JSON parsing)
+- `tmux` (with popup support for the viewer)
+- `tmux-notify` binary (pre-built or compiled from source)
+- Optional:
+  - `jq` (for popup viewer formatting)
   - `fzf` (required for the popup viewer)
-
-Notes:
-- The popup viewer uses `tmux popup`, which needs a recent tmux version.
-- If you only use the status counter, `fzf` is not required.
 
 ## Installation
 
@@ -37,36 +33,34 @@ set -g @plugin 'xiaocang/tmux-notify'
 
 Reload tmux config and press `prefix + I` to install.
 
-### Manual
+The binary will be automatically downloaded for your platform (macOS/Linux, x86_64/arm64).
+
+### Building from Source
+
+Requires Rust toolchain:
 
 ```bash
-git clone https://github.com/xiaocang/tmux-notify ~/.tmux/plugins/tmux-notify
-```
-
-Add to `~/.tmux.conf`:
-
-```tmux
-run-shell ~/.tmux/plugins/tmux-notify/notify.tmux
+cd ~/.tmux/plugins/tmux-notify
+cargo build --release
+# Binary is at target/release/tmux-notify
 ```
 
 ## Configuration
 
 Place options **before** the plugin line in `~/.tmux.conf`.
 
-### Config reference
-
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `@notify_terminal_notifier_path` | `terminal-notifier` | Path to `terminal-notifier` binary |
-| `@notify_popup_key` | `n` | Key (after prefix) to open popup viewer; set empty to disable |
+| `@notify_popup_key` | *(empty)* | Key (after prefix) to open popup viewer |
 | `@notify_mark_read_on_pane_switch` | `on` | `on`/`off` for marking notifications read on pane switch |
+| `@notify_retention_hours` | `24` | Hours to keep notifications before auto-cleanup |
 
 Example:
 
 ```tmux
-set -g @notify_terminal_notifier_path "/opt/homebrew/bin/terminal-notifier"
 set -g @notify_popup_key "n"
 set -g @notify_mark_read_on_pane_switch "on"
+set -g @notify_retention_hours "24"
 ```
 
 ## Usage
@@ -76,51 +70,73 @@ set -g @notify_mark_read_on_pane_switch "on"
 Add `#{notify_status}` or `#{notify_count}` to your status line:
 
 ```tmux
-# Shows: "3 [%5]"
+# Shows: "3 [%5]" (count and latest pane)
 set -g status-right "#{notify_status} | %H:%M"
 
-# Shows: "3"
+# Shows: "3" (count only)
 set -g status-right "#{notify_count} | %H:%M"
 ```
 
-### Sending notifications
+### CLI
 
-Associate a notification with the current pane:
+```
+$ tmux-notify --help
+Notification storage for tmux
 
-```bash
-terminal-notifier -message "Build complete" -title "CI" -pane "$(tmux display-message -p '#{pane_id}')"
+Usage: tmux-notify [OPTIONS] <COMMAND>
+
+Commands:
+  add        Add or replace a notification for a pane
+  query      Query all notifications (JSON output)
+  count      Get unread notification count
+  mark-read  Mark notification as read for a pane
+  dismiss    Dismiss (delete) notification for a pane
+  cleanup    Manually cleanup old notifications
+  reset      Reset (delete) the entire notification database
+  help       Print this message or the help of the given subcommand(s)
+
+Options:
+      --db-path <DB_PATH>  Custom database path
+  -h, --help               Print help
 ```
 
 ### Popup viewer
 
 Press `prefix + n` (or your configured `@notify_popup_key`):
 
-- **Enter**: switch to the notification’s pane
-- **Ctrl-D**: dismiss the selected notification
-- **Esc**: close popup
+- **Enter**: Switch to the notification's pane
+- **Ctrl-D**: Dismiss the selected notification
+- **Esc**: Close popup
 
-## FAQ
+## Data Storage
 
-### `#{notify_count}` always shows 0
-- Ensure your `terminal-notifier` supports daemon commands and `-query` works.
-- If you set `@notify_terminal_notifier_path`, confirm the path is correct.
-- When `-query` returns `"ok": false`, the daemon is likely not running or not the expected build.
+Notifications are stored in SQLite at:
+- `$XDG_DATA_HOME/tmux-notify/notifications.db`
+- Fallback: `~/.local/share/tmux-notify/notifications.db`
 
-### Popup viewer says `jq` or `fzf` is required
-- The popup viewer requires `fzf`.
-- The current formatting requires `jq`; install both or disable the popup key: `set -g @notify_popup_key ""`.
+## Integration Examples
 
-### "Pane %X not found"
-- The notification points to a pane that no longer exists (window/session closed).
+Example hook scripts are provided in `examples/` for integrating with AI coding assistants.
 
-### Popup does not open
-- Your tmux may not support `tmux popup`. Upgrade tmux or disable the popup key.
+### Claude Code
 
-### Disable auto mark-read
-
-```tmux
-set -g @notify_mark_read_on_pane_switch "off"
+Add to `~/.claude/settings.json`:
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": ["~/.tmux/plugins/tmux-notify/examples/claude-code-notify.sh"]
+      }
+    ]
+  }
+}
 ```
+
+### OpenAI Codex
+
+Use `examples/codex-notify.sh` as a hook script for Codex CLI.
 
 ## License
 

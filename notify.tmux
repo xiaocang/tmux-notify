@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# tmux-notify - TPM plugin for terminal-notifier daemon integration
+# tmux-notify - TPM plugin for notification management
 #
 # This plugin provides:
 # - Status line widget showing unread notification count
@@ -11,10 +11,9 @@
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default options
-default_terminal_notifier_path="terminal-notifier"
-default_status_format="#[fg=yellow]#{notify_count}#[default]"
 default_popup_key=""
 default_mark_read_on_pane_switch="on"
+default_retention_hours="24"
 
 # Get tmux option with default
 get_tmux_option() {
@@ -27,11 +26,6 @@ get_tmux_option() {
     else
         echo "$option_value"
     fi
-}
-
-# Get terminal-notifier path
-get_tn_path() {
-    get_tmux_option "@notify_terminal_notifier_path" "$default_terminal_notifier_path"
 }
 
 # Set up format strings for status line
@@ -71,8 +65,14 @@ setup_pane_switch_hook() {
     fi
 }
 
+# Ensure binary is installed
+ensure_binary_installed() {
+    "$CURRENT_DIR/scripts/install.sh" 2>/dev/null || true
+}
+
 # Main setup
 main() {
+    ensure_binary_installed
     setup_notify_interpolation
     setup_popup_keybinding
     setup_pane_switch_hook

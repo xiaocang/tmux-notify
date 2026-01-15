@@ -1,0 +1,19 @@
+[package]
+name = "tmux-notify"
+# Keep in sync with VERSION file
+version = "0.1.0"
+edition = "2021"
+description = "Notification daemon for tmux"
+license = "MIT"
+repository = "https://github.com/xiaocang/tmux-notify"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "5"
+
+[profile.release]
+lto = true
+strip = true

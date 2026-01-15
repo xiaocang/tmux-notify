@@ -8,15 +8,31 @@
 
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Get terminal-notifier path from tmux option or use default
-get_tn_path() {
-    local path
-    path=$(tmux show-option -gqv "@notify_terminal_notifier_path" 2>/dev/null)
-    if [[ -z "$path" ]]; then
-        echo "terminal-notifier"
-    else
-        echo "$path"
+# Get the tmux-notify binary path
+get_binary_path() {
+    local bin_path
+
+    # Check for bundled binary first
+    bin_path="${CURRENT_DIR}/../bin/tmux-notify"
+    if [[ -x "$bin_path" ]]; then
+        echo "$bin_path"
+        return
     fi
+
+    # Check for development build
+    bin_path="${CURRENT_DIR}/../target/release/tmux-notify"
+    if [[ -x "$bin_path" ]]; then
+        echo "$bin_path"
+        return
+    fi
+
+    # Fall back to PATH
+    if command -v tmux-notify &>/dev/null; then
+        echo "tmux-notify"
+        return
+    fi
+
+    echo ""
 }
 
 # Format notification for display
@@ -32,20 +48,25 @@ format_notification() {
         (if .state == "unread" then "*" else " " end) + " " +
         "[" + .pane + "] " +
         .title + ": " + .message +
-        "\t" + .identifier' 2>/dev/null
+        "\t" + .pane' 2>/dev/null
 }
 
 # Show popup with fzf
 show_popup() {
-    local tn_path
-    tn_path=$(get_tn_path)
+    local binary
+    binary=$(get_binary_path)
+
+    if [[ -z "$binary" ]]; then
+        tmux display-message "Error: tmux-notify binary not found"
+        return 1
+    fi
 
     # Query notifications
     local json
-    json=$("$tn_path" -query 2>/dev/null)
+    json=$("$binary" query 2>/dev/null)
 
     if [[ -z "$json" ]] || [[ "$json" == *'"ok":false'* ]]; then
-        tmux display-message "No notifications (daemon not running)"
+        tmux display-message "Error querying notifications"
         return 1
     fi
 
@@ -78,13 +99,13 @@ show_popup() {
     selected=$(tmux popup -E -w 80% -h 60% "cat '$tmpfile' | fzf \
         --ansi \
         --header='Enter: go to pane | Ctrl-D: dismiss | Esc: close' \
-        --bind='ctrl-d:execute-silent($tn_path -dismiss {-1})+reload(cat $tmpfile)' \
+        --bind='ctrl-d:execute-silent($binary dismiss {-1})+reload(cat $tmpfile)' \
         --preview-window=hidden")
 
     rm -f "$tmpfile"
 
     if [[ -n "$selected" ]]; then
-        # Extract pane from selection (format: "* [%5] Title: Message\tID")
+        # Extract pane from selection (format: "* [%5] Title: Message\tPANE")
         local pane
         pane=$(echo "$selected" | grep -o '\[%[0-9]*\]' | tr -d '[]')
 
