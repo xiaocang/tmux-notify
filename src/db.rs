@@ -89,12 +89,14 @@ impl Database {
         Ok(notifications)
     }
 
-    pub fn count_unread(&self) -> Result<i64> {
-        self.conn.query_row(
-            "SELECT COUNT(*) FROM notifications WHERE state = 'unread'",
-            [],
-            |row| row.get(0),
-        )
+    pub fn get_unread_panes(&self) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT pane FROM notifications WHERE state = 'unread'")?;
+        let panes = stmt
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<Vec<String>>>()?;
+        Ok(panes)
     }
 
     pub fn mark_read(&self, pane: &str) -> Result<usize> {

@@ -1,4 +1,4 @@
-.PHONY: bump build release clean
+.PHONY: bump build test clean
 
 VERSION ?= $(error VERSION is required. Usage: make bump VERSION=0.2.0)
 
@@ -14,6 +14,10 @@ bump:
 # Build release binary
 build:
 	cargo build --release
+
+# Run e2e tests (requires tmux)
+test: build
+	@./tests/e2e_test.sh
 
 # Clean build artifacts
 clean:

@@ -97,6 +97,13 @@ main() {
     retention=$(tmux show-option -gqv '@notify_retention_hours')
     retention=${retention:-24}
     "$binary" cleanup --retention "$retention" &>/dev/null &
+
+    # Prune notifications for panes that no longer exist
+    local valid_panes
+    valid_panes=$(tmux list-panes -a -F '#{pane_id}' 2>/dev/null | tr '\n' ',')
+    if [[ -n "$valid_panes" ]]; then
+        "$binary" prune --valid-panes "$valid_panes" &>/dev/null &
+    fi
 }
 
 main "$@"

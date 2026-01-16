@@ -132,8 +132,27 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Count => {
-            let count = db.count_unread()?;
-            println!("{}", count);
+            let panes = db.get_unread_panes()?;
+            if panes.is_empty() {
+                println!("0");
+            } else {
+                // Get window ID for each pane and count unique windows
+                let mut windows = std::collections::HashSet::new();
+                for pane in &panes {
+                    if let Ok(output) = std::process::Command::new("tmux")
+                        .args(["display-message", "-p", "-t", pane, "#{window_id}"])
+                        .output()
+                    {
+                        if output.status.success() {
+                            let window_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                            if !window_id.is_empty() {
+                                windows.insert(window_id);
+                            }
+                        }
+                    }
+                }
+                println!("{}", windows.len());
+            }
         }
 
         Commands::MarkRead { pane } => {
